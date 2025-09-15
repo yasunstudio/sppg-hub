@@ -953,3 +953,160 @@ GET /api/reports/nutrition/:sppgId    // Nutrition compliance
 ---
 
 *This roadmap is a living document that will be updated regularly as the project evolves. All team members are encouraged to contribute feedback and suggestions for improvement.*
+
+SPPG-Hub Navigation Structure:
+
+📊 Dashboard
+├── Overview (Mitra level - semua SPPG)
+└── SPPG Dashboard (per SPPG)
+
+🏢 SPPG Management
+├── SPPG List & Setup
+├── SPPG Switching
+└── SPPG Settings
+
+🍽️ Menu Planning
+├── Menu Creation
+├── Nutrition Calculator
+├── Menu Calendar
+└── Recipe Management
+
+🏭 Production
+├── Production Planning
+├── Daily Production
+├── Quality Control
+└── Waste Tracking
+
+📦 Inventory
+├── Stock Management
+├── Suppliers
+├── Purchase Orders
+└── Stock Alerts
+
+🚚 Distribution
+├── Route Planning
+├── Live Tracking
+├── Delivery Status
+└── Driver Management
+
+🏫 Schools
+├── School Management
+├── Orders
+├── Delivery Confirmation
+└── Feedback
+
+💰 Financial
+├── Budget Planning
+├── Cost Analysis
+├── Budget Requests
+└── Financial Reports
+
+👥 HR & Attendance
+├── Employee Management
+├── Attendance Tracking
+├── Payroll
+└── Shift Management
+
+📊 Reports
+├── Real-time Dashboard
+├── Operational Reports
+├── Financial Reports
+└── Compliance Reports
+
+⚙️ Settings
+├── User Management
+├── System Settings
+├── Audit Logs
+└── Backup & Recovery
+
+Berdasarkan seluruh diskusi kita, berikut adalah modul-modul utama yang akan kita bangun untuk aplikasi SPPG-Hub:
+
+🏗️ CORE MODULES SPPG-HUB
+1. 🏢 TENANT & USER MANAGEMENT
+Multi-SPPG Management (max 10 SPPG per mitra)
+Role-based Access Control (Mitra Admin, SPPG Manager, Ahli Gizi, Driver, dll)
+User Authentication & Authorization
+SPPG Switching/Selection Interface
+2. 🍽️ MENU PLANNING & NUTRITION
+Menu Creation System (per SPPG, per jenjang TK/SD/SMP/SMA)
+AKG Compliance Engine (standar Kemenkes)
+Nutrition Calculator & Validation
+Menu Scheduling & Rotation
+Recipe & Ingredient Management
+3. 🏭 PRODUCTION MANAGEMENT
+Daily Production Planning
+Production Capacity Calculation
+Production Tracking & Status
+Quality Control Checklist
+Waste Management Tracking
+4. 📦 INVENTORY & PROCUREMENT
+Stock Management (per SPPG)
+Supplier Management (independent per SPPG)
+Purchase Order System
+Stock Alert & Notification
+Ingredient Costing
+5. 🚚 DISTRIBUTION & LOGISTICS
+Route Planning & Management
+Real-time GPS Tracking
+Delivery Scheduling
+Driver Mobile Interface
+Proof of Delivery System
+Issue Reporting & Handling
+6. 🏫 SCHOOL MANAGEMENT
+School Registration & Profiles
+Daily Order Management
+Student Count Tracking
+Delivery Confirmation
+Feedback & Rating System
+7. 💰 FINANCIAL & BUDGETING
+Cost Calculation per Menu
+Budget Request System (5-day planning)
+Budget Approval Workflow (SPPG → Mitra)
+Cost Tracking & Analysis
+Financial Reporting
+8. 👥 HR & ATTENDANCE
+Employee Management (per SPPG)
+Attendance Tracking System
+Basic Payroll Calculation
+Shift Management
+Role & Responsibility Management
+9. 📊 REPORTING & ANALYTICS
+Real-time Dashboard (Mitra level & SPPG level)
+Daily/Weekly/Monthly Reports
+Performance Analytics
+Cost Analysis & Trends
+Nutrition Compliance Reports
+Export System (Excel, PDF)
+10. 🔔 NOTIFICATION & COMMUNICATION
+Real-time Alerts & Notifications
+System Announcements
+Emergency Communication
+Status Updates
+11. ⚙️ SYSTEM ADMINISTRATION
+System Configuration
+Audit Trail & Logging
+Data Backup & Recovery
+System Health Monitoring
+12. 📱 MOBILE & PWA FEATURES
+Responsive Design (Mobile/Tablet/Desktop)
+Progressive Web App capabilities
+Offline Support (critical features)
+GPS Integration
+Camera Integration (QR codes, photos)
+🎯 MODULE PRIORITIZATION:
+📈 PHASE 1 (MVP - Core Operations):
+Tenant & User Management
+Menu Planning & Nutrition (basic)
+School Management
+Production Management (basic)
+Financial & Budgeting (basic)
+📈 PHASE 2 (Full Operations):
+Distribution & Logistics
+Inventory & Procurement
+HR & Attendance
+Reporting & Analytics (essential)
+📈 PHASE 3 (Advanced Features):
+Notification & Communication
+System Administration
+Mobile & PWA optimization
+Advanced Analytics & AI features
