@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: sppg-hub-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sppg_user
+      POSTGRES_PASSWORD: sppg_password
+      POSTGRES_DB: sppg_hub_db
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - sppg-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sppg_user -d sppg_hub_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: PgAdmin untuk management database
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: sppg-hub-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@sppg-hub.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - sppg-network
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:
+  pgadmin_data:
+
+networks:
+  sppg-network:
+    driver: bridge

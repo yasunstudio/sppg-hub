@@ -31,7 +31,16 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files (can opt-in for committing if needed)
-.env*
+.env.local
+.env
+
+# Don't ignore example env file
+!.env.example
+
+# Docker & Database
+docker-compose.override.yml
+postgres_data/
+pgadmin_data/
 
 # vercel
 .vercel
@@ -39,3 +48,5 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+/src/generated/prisma
