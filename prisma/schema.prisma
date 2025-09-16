@@ -6,10 +6,1284 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
+  // output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+// ================================
+// MULTI-TENANT ARCHITECTURE
+// ================================
+
+// Mitra/Yayasan (Top-level tenant)
+model Mitra {
+  id       String  @id @default(cuid())
+  name     String
+  province String
+  address  String?
+  phone    String?
+  email    String?
+
+  // Business info
+  licenseNumber String?
+  contactPerson String?
+
+  // Metadata
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations (1 Mitra -> max 10 SPPG)
+  sppg  Sppg[]
+  users User[]
+
+  @@map("mitra")
+}
+
+// SPPG (Satuan Pelayanan Pemenuhan Gizi)
+model Sppg {
+  id      String @id @default(cuid())
+  mitraId String
+  name    String
+  code    String @unique // SPPG unique code
+  address String
+
+  // Operational info
+  capacity       Int // Daily serving capacity
+  operatingHours String?
+  latitude       Float?
+  longitude      Float?
+
+  // Facilities info (JSON)
+  facilities Json?
+
+  // Metadata
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  mitra          Mitra           @relation(fields: [mitraId], references: [id])
+  users          User[]
+  menus          Menu[]
+  productions    Production[]
+  schools        School[]
+  routes         Route[]
+  inventoryItems InventoryItem[]
+  suppliers      Supplier[]
+  budgets        Budget[]
+  employees      Employee[]
+  purchaseOrders PurchaseOrder[]
+  orders         Order[]
+  
+  // Financial relations
+  revenues         Revenue[]
+  financialReports FinancialReport[]
+  financialKPIs    FinancialKPI[]
+  cashFlows        CashFlow[]
+
+  @@map("sppg")
+}
+
+// ================================
+// USER MANAGEMENT
+// ================================
+
+enum UserRole {
+  MITRA_ADMIN
+  SPPG_MANAGER
+  AHLI_GIZI
+  CHEF
+  FINANCE_OFFICER
+  HR_STAFF
+  DRIVER
+  WAREHOUSE_STAFF
+  SCHOOL_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  role         UserRole
+  status       UserStatus @default(ACTIVE)
+
+  // Profile
+  firstName String
+  lastName  String
+  phone     String?
+  avatar    String?
+
+  // Multi-tenant fields
+  mitraId String?
+  sppgId  String?
+
+  // Auth & Session
+  emailVerified DateTime?
+  lastLogin     DateTime?
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  mitra      Mitra?     @relation(fields: [mitraId], references: [id])
+  sppg       Sppg?      @relation(fields: [sppgId], references: [id])
+  employee   Employee?
+  deliveries Delivery[]
+
+  @@map("users")
+}
+
+// ================================
+// MENU PLANNING & NUTRITION
+// ================================
+
+enum TargetLevel {
+  TK
+  SD
+  SMP
+  SMA
+}
+
+enum MenuStatus {
+  DRAFT
+  APPROVED
+  ACTIVE
+  INACTIVE
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+}
+
+model Menu {
+  id          String      @id @default(cuid())
+  sppgId      String
+  name        String
+  description String?
+  targetLevel TargetLevel
+  mealType    MealType
+  status      MenuStatus  @default(DRAFT)
+  servingDate DateTime?
+
+  // Nutrition info (AKG compliance)
+  calories Float?
+  protein  Float?
+  carbs    Float?
+  fat      Float?
+  fiber    Float?
+  sodium   Float?
+  sugar    Float?
+  calcium  Float?
+  iron     Float?
+
+  // Cost info
+  costPerPortion Float?
+  ingredientCost Float?
+  laborCost      Float?
+  overheadCost   Float?
+
+  // Serving info
+  servingSize       Int? // in grams
+  estimatedPrepTime Int? // in minutes
+  prepTime         Int? // in minutes
+  cookTime         Int? // in minutes
+
+  // Metadata
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  approvedAt DateTime?
+  approvedBy String?
+
+  // Relations
+  sppg        Sppg         @relation(fields: [sppgId], references: [id])
+  recipes     Recipe[]
+  productions Production[]
+  orders      Order[]
+  menuItems   MenuItem[]
+
+  @@map("menus")
+}
+
+// Recipe for each menu
+model Recipe {
+  id           String @id @default(cuid())
+  menuId       String
+  instructions String
+  servingSize  Int
+  prepTime     Int // minutes
+  cookTime     Int? // minutes
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  menu        Menu               @relation(fields: [menuId], references: [id])
+  ingredients RecipeIngredient[]
+
+  @@map("recipes")
+}
+
+// Ingredients master data
+model Ingredient {
+  id       String @id @default(cuid())
+  name     String
+  category String // Protein, Carbs, Vegetables, etc
+  unit     String // kg, gram, liter, piece
+
+  // Nutrition per 100g
+  caloriesPer100g Float
+  proteinPer100g  Float
+  carbsPer100g    Float
+  fatPer100g      Float
+  fiberPer100g    Float
+  sodiumPer100g   Float?
+
+  // Standard info
+  shelfLife   Int? // days
+  storageTemp String? // room, cold, frozen
+
+  // Metadata
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  recipeIngredients  RecipeIngredient[]
+  inventoryItems     InventoryItem[]
+  purchaseOrderItems PurchaseOrderItem[]
+
+  @@map("ingredients")
+}
+
+// Junction table for recipe ingredients
+model RecipeIngredient {
+  id           String  @id @default(cuid())
+  recipeId     String
+  ingredientId String
+  quantity     Float
+  unit         String
+  notes        String?
+
+  // Relations
+  recipe     Recipe     @relation(fields: [recipeId], references: [id])
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id])
+
+  @@unique([recipeId, ingredientId])
+  @@map("recipe_ingredients")
+}
+
+// Menu items for detailed planning
+model MenuItem {
+  id       String @id @default(cuid())
+  menuId   String
+  name     String
+  category String // Main, Side, Drink, Dessert
+  quantity Int // pieces per serving
+
+  // Relations
+  menu Menu @relation(fields: [menuId], references: [id])
+
+  @@map("menu_items")
+}
+
+// ================================
+// PRODUCTION MANAGEMENT
+// ================================
+
+enum ProductionStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  DELAYED
+  CANCELLED
+}
+
+model Production {
+  id             String   @id @default(cuid())
+  sppgId         String
+  menuId         String
+  productionDate DateTime
+
+  // Planning
+  plannedQuantity Int
+  actualQuantity  Int?
+
+  // Timing
+  startTime DateTime?
+  endTime   DateTime?
+
+  // Status & Quality
+  status       ProductionStatus @default(PLANNED)
+  qualityScore Int? // 1-10
+  qualityNotes String?
+
+  // Staff assignment
+  chefId     String?
+  assistants String[] // Array of user IDs
+
+  // Cost tracking
+  actualCost  Float?
+  wasteAmount Float? // in kg
+  wasteReason String?
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  sppg          Sppg           @relation(fields: [sppgId], references: [id])
+  menu          Menu           @relation(fields: [menuId], references: [id])
+  qualityChecks QualityCheck[]
+  orders        Order[]
+
+  @@map("productions")
+}
+
+// Quality control checks
+model QualityCheck {
+  id           String   @id @default(cuid())
+  productionId String
+  checkType    String // Temperature, Taste, Appearance, Hygiene
+  checkValue   String // Pass/Fail or numeric value
+  notes        String?
+  checkedBy    String // User ID
+  checkedAt    DateTime @default(now())
+
+  // Relations
+  production Production @relation(fields: [productionId], references: [id])
+
+  @@map("quality_checks")
+}
+
+// ================================
+// INVENTORY MANAGEMENT
+// ================================
+
+enum InventoryStatus {
+  IN_STOCK
+  LOW_STOCK
+  OUT_OF_STOCK
+  EXPIRED
+}
+
+model InventoryItem {
+  id           String @id @default(cuid())
+  sppgId       String
+  ingredientId String
+
+  // Stock info
+  currentStock Float
+  minimumStock Float
+  maximumStock Float?
+  unit         String
+
+  // Cost info
+  unitCost   Float
+  totalValue Float
+
+  // Expiry tracking
+  expiryDate  DateTime?
+  batchNumber String?
+
+  // Status
+  status InventoryStatus @default(IN_STOCK)
+
+  // Location
+  storageLocation String?
+
+  // Metadata
+  lastRestocked DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  sppg           Sppg            @relation(fields: [sppgId], references: [id])
+  ingredient     Ingredient      @relation(fields: [ingredientId], references: [id])
+  stockMovements StockMovement[]
+
+  @@unique([sppgId, ingredientId, batchNumber])
+  @@map("inventory_items")
+}
+
+enum MovementType {
+  IN
+  OUT
+  ADJUSTMENT
+  WASTE
+  EXPIRED
+}
+
+model StockMovement {
+  id              String       @id @default(cuid())
+  inventoryItemId String
+  movementType    MovementType
+  quantity        Float
+  unit            String
+
+  // Reference info
+  referenceType String? // Production, Purchase, Adjustment
+  referenceId   String? // ID of the reference document
+
+  // Cost impact
+  unitCost   Float?
+  totalValue Float?
+
+  // Details
+  notes       String?
+  performedBy String // User ID
+
+  // Metadata
+  createdAt DateTime @default(now())
+
+  // Relations
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+
+  @@map("stock_movements")
+}
+
+// ================================
+// SUPPLIER & PROCUREMENT
+// ================================
+
+enum SupplierStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  BLACKLISTED
+}
+
+model Supplier {
+  id       String @id @default(cuid())
+  sppgId   String
+  name     String
+  category String // Protein, Vegetables, Dairy, etc
+
+  // Contact info
+  contactPerson String
+  phone         String
+  email         String?
+  address       String
+
+  // Business info
+  taxId        String?
+  bankAccount  String?
+  paymentTerms String?
+
+  // Performance
+  rating Float? // 1-5
+  status SupplierStatus @default(ACTIVE)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  sppg           Sppg            @relation(fields: [sppgId], references: [id])
+  purchaseOrders PurchaseOrder[]
+
+  @@map("suppliers")
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  SENT
+  PARTIALLY_RECEIVED
+  COMPLETED
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id          String @id @default(cuid())
+  sppgId      String
+  supplierId  String
+  orderNumber String @unique
+
+  // Order info
+  orderDate    DateTime  @default(now())
+  expectedDate DateTime
+  receivedDate DateTime?
+
+  // Status & amounts
+  status      PurchaseOrderStatus @default(DRAFT)
+  subtotal    Float
+  taxAmount   Float?
+  totalAmount Float
+
+  // Payment info
+  paymentStatus String? // Pending, Paid, Partial
+  paymentDate   DateTime?
+
+  // Approval
+  approvedBy String?
+  approvedAt DateTime?
+
+  // Notes
+  notes String?
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  sppg     Sppg                @relation(fields: [sppgId], references: [id], map: "PurchaseOrder_sppgId_fkey")
+  supplier Supplier            @relation(fields: [supplierId], references: [id])
+  items    PurchaseOrderItem[]
+
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id              String @id @default(cuid())
+  purchaseOrderId String
+  ingredientId    String
+
+  // Order details
+  quantity  Float
+  unit      String
+  unitCost  Float
+  totalCost Float
+
+  // Receiving
+  receivedQuantity Float?
+  receivedDate     DateTime?
+
+  // Quality
+  qualityGrade String? // A, B, C
+  notes        String?
+
+  // Relations
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  ingredient    Ingredient    @relation(fields: [ingredientId], references: [id])
+
+  @@map("purchase_order_items")
+}
+
+// ================================
+// SCHOOL MANAGEMENT
+// ================================
+
+enum SchoolStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+model School {
+  id      String @id @default(cuid())
+  sppgId  String
+  name    String
+  code    String @unique
+  address String
+
+  // Contact info
+  principalName String
+  contactPerson String
+  phone         String
+  email         String?
+
+  // Student info
+  totalStudents Int
+  tkStudents    Int @default(0)
+  sdStudents    Int @default(0)
+  smpStudents   Int @default(0)
+  smaStudents   Int @default(0)
+
+  // Location
+  latitude      Float?
+  longitude     Float?
+  deliveryNotes String?
+
+  // Status
+  status SchoolStatus @default(ACTIVE)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  sppg       Sppg             @relation(fields: [sppgId], references: [id])
+  orders     Order[]
+  deliveries Delivery[]
+  feedbacks  SchoolFeedback[]
+
+  @@map("schools")
+}
+
+// ================================
+// ORDER MANAGEMENT
+// ================================
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  READY
+  DELIVERED
+  CANCELLED
+}
+
+model Order {
+  id           String  @id @default(cuid())
+  sppgId       String
+  schoolId     String
+  menuId       String
+  productionId String?
+
+  // Order details
+  orderDate    DateTime @default(now())
+  deliveryDate DateTime
+
+  // Quantities
+  tkQuantity    Int @default(0)
+  sdQuantity    Int @default(0)
+  smpQuantity   Int @default(0)
+  smaQuantity   Int @default(0)
+  totalQuantity Int
+
+  // Status
+  status OrderStatus @default(PENDING)
+
+  // Delivery info
+  deliveryTime DateTime?
+  deliveredBy  String? // Driver user ID
+
+  // Special instructions
+  specialNotes String?
+  allergies    String[]
+
+  // Metadata
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  confirmedAt DateTime?
+
+  // Relations
+  sppg       Sppg            @relation(fields: [sppgId], references: [id], map: "Order_sppgId_fkey")
+  school     School          @relation(fields: [schoolId], references: [id])
+  menu       Menu            @relation(fields: [menuId], references: [id])
+  production Production?     @relation(fields: [productionId], references: [id])
+  deliveries Delivery[]
+  feedbacks  OrderFeedback[]
+
+  @@map("orders")
+}
+
+// School feedback on food quality
+model SchoolFeedback {
+  id       String   @id @default(cuid())
+  schoolId String
+  date     DateTime @default(now())
+
+  // Ratings (1-5)
+  tasteRating   Int
+  qualityRating Int
+  serviceRating Int
+  overallRating Int
+
+  // Comments
+  comments    String?
+  suggestions String?
+
+  // Issues
+  issues String[]
+
+  // Metadata
+  submittedBy String // School admin user ID
+  createdAt   DateTime @default(now())
+
+  // Relations
+  school School @relation(fields: [schoolId], references: [id])
+
+  @@map("school_feedbacks")
+}
+
+model OrderFeedback {
+  id      String @id @default(cuid())
+  orderId String
+
+  // Ratings
+  rating   Int // 1-5
+  comments String?
+  issues   String[]
+
+  // Metadata
+  createdAt DateTime @default(now())
+
+  // Relations
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@map("order_feedbacks")
+}
+
+// ================================
+// DISTRIBUTION & LOGISTICS
+// ================================
+
+enum RouteStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Route {
+  id          String  @id @default(cuid())
+  sppgId      String
+  name        String
+  description String?
+
+  // Route details
+  schools           String[] // Array of school IDs
+  estimatedTime     Int // minutes
+  estimatedDistance Float? // km
+
+  // Optimization
+  sequence Json? // Optimized sequence of schools
+
+  // Status
+  status RouteStatus @default(ACTIVE)
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  sppg       Sppg       @relation(fields: [sppgId], references: [id])
+  deliveries Delivery[]
+
+  @@map("routes")
+}
+
+enum DeliveryStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  DELAYED
+  FAILED
+}
+
+model Delivery {
+  id       String  @id @default(cuid())
+  orderId  String
+  routeId  String?
+  schoolId String
+  driverId String
+
+  // Delivery details
+  deliveryDate  DateTime
+  scheduledTime DateTime
+  startTime     DateTime?
+  endTime       DateTime?
+
+  // Status
+  status DeliveryStatus @default(SCHEDULED)
+
+  // Location tracking
+  gpsTracking     Json[] // Array of {lat, lng, timestamp}
+  currentLocation Json? // Current GPS position
+
+  // Proof of delivery
+  deliveryPhoto String?
+  receivedBy    String? // Name of person who received
+  signature     String? // Digital signature
+  notes         String?
+
+  // Issues
+  issues      String[]
+  delayReason String?
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  order  Order  @relation(fields: [orderId], references: [id])
+  route  Route? @relation(fields: [routeId], references: [id])
+  school School @relation(fields: [schoolId], references: [id])
+  driver User   @relation(fields: [driverId], references: [id])
+
+  @@map("deliveries")
+}
+
+// ================================
+// FINANCIAL MANAGEMENT
+// ================================
+
+enum BudgetStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+model Budget {
+  id     String @id @default(cuid())
+  sppgId String
+
+  // Budget period
+  periodStart DateTime
+  periodEnd   DateTime
+  budgetType  String // Weekly, Monthly, Special Event
+
+  // Budget breakdown
+  totalAmount     Float
+  ingredientCost  Float
+  laborCost       Float
+  operationalCost Float
+  contingency     Float?
+
+  // Planned production
+  plannedPortions Int
+  costPerPortion  Float
+
+  // Status
+  status BudgetStatus @default(DRAFT)
+
+  // Approval flow
+  submittedBy     String? // SPPG Manager user ID
+  submittedAt     DateTime?
+  approvedBy      String? // Mitra Admin user ID
+  approvedAt      DateTime?
+  rejectionReason String?
+
+  // Notes
+  description String?
+  notes       String?
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  sppg     Sppg      @relation(fields: [sppgId], references: [id])
+  expenses Expense[]
+
+  @@map("budgets")
+}
+
+enum ExpenseCategory {
+  INGREDIENTS
+  LABOR
+  FUEL
+  UTILITIES
+  MAINTENANCE
+  PACKAGING
+  TRANSPORTATION
+  OTHER
+}
+
+model Expense {
+  id       String  @id @default(cuid())
+  budgetId String?
+  sppgId   String
+
+  // Expense details
+  category    ExpenseCategory
+  description String
+  amount      Float
+  date        DateTime        @default(now())
+
+  // Reference
+  referenceType String? // PurchaseOrder, Payroll, etc
+  referenceId   String?
+
+  // Receipt/proof
+  receiptUrl    String?
+  receiptNumber String?
+
+  // Approval
+  approvedBy String?
+  approvedAt DateTime?
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  budget Budget? @relation(fields: [budgetId], references: [id])
+
+  @@map("expenses")
+}
+
+// Revenue tracking
+model Revenue {
+  id     String @id @default(cuid())
+  sppgId String
+
+  // Revenue details
+  category    String // Contract Revenue, Additional Services, etc
+  description String
+  amount      Float
+  date        DateTime @default(now())
+
+  // Reference to source
+  referenceType String? // OrderContract, Invoice, etc
+  referenceId   String?
+
+  // Invoice info
+  invoiceNumber String?
+  paymentStatus String  @default("Pending") // Pending, Paid, Overdue
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  sppg Sppg @relation(fields: [sppgId], references: [id])
+
+  @@map("revenues")
+}
+
+// Financial reports and statements
+enum ReportType {
+  PROFIT_LOSS
+  CASH_FLOW
+  BALANCE_SHEET
+  BUDGET_VS_ACTUAL
+  PAYROLL_SUMMARY
+  EXPENSE_ANALYSIS
+}
+
+model FinancialReport {
+  id     String @id @default(cuid())
+  sppgId String
+
+  // Report details
+  type        ReportType
+  title       String
+  periodStart DateTime   @db.Date
+  periodEnd   DateTime   @db.Date
+
+  // Financial summary
+  totalRevenue  Float @default(0)
+  totalExpenses Float @default(0)
+  netProfit     Float @default(0)
+
+  // Detailed breakdown
+  data Json // Detailed financial data as JSON
+
+  // Status
+  status String @default("Draft") // Draft, Published, Archived
+
+  // Generated by
+  generatedBy String? // User ID
+  generatedAt DateTime @default(now())
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  sppg Sppg @relation(fields: [sppgId], references: [id])
+
+  @@map("financial_reports")
+}
+
+// Financial KPIs and metrics tracking
+model FinancialKPI {
+  id     String @id @default(cuid())
+  sppgId String
+
+  // KPI details
+  name        String // "Food Cost %", "Labor Cost %", "Profit Margin %"
+  category    String // Profitability, Efficiency, Cost Management
+  value       Float
+  target      Float? // Target value for the KPI
+  unit        String @default("%") // %, IDR, Hours, etc
+  period      DateTime @db.Date
+  frequency   String @default("Monthly") // Daily, Weekly, Monthly, Quarterly
+
+  // Calculation method
+  formula     String? // How this KPI is calculated
+  numerator   Float? // For ratio calculations
+  denominator Float? // For ratio calculations
+
+  // Status indicators
+  status String @default("On Track") // On Track, At Risk, Critical
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  sppg Sppg @relation(fields: [sppgId], references: [id])
+
+  @@unique([sppgId, name, period])
+  @@map("financial_kpis")
+}
+
+// Cash flow tracking
+enum CashFlowType {
+  INFLOW
+  OUTFLOW
+}
+
+enum CashFlowCategory {
+  OPERATING    // Day-to-day operations
+  INVESTING    // Equipment, infrastructure
+  FINANCING    // Loans, investments
+}
+
+model CashFlow {
+  id     String @id @default(cuid())
+  sppgId String
+
+  // Cash flow details
+  type        CashFlowType
+  category    CashFlowCategory
+  amount      Float
+  description String
+  date        DateTime @default(now())
+
+  // Reference
+  referenceType String? // Revenue, Expense, Investment, etc
+  referenceId   String?
+
+  // Bank account info
+  bankAccount String?
+  paymentMethod String?
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  sppg Sppg @relation(fields: [sppgId], references: [id])
+
+  @@map("cash_flows")
+}
+
+// ================================
+// HR & EMPLOYEE MANAGEMENT
+// ================================
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+  TERMINATED
+  ON_LEAVE
+}
+
+enum EmployeePosition {
+  SPPG_MANAGER
+  AHLI_GIZI
+  CHEF
+  ASSISTANT_CHEF
+  DRIVER
+  WAREHOUSE_STAFF
+  CLEANER
+  ADMIN
+  FINANCE_OFFICER
+}
+
+model Employee {
+  id             String @id @default(cuid())
+  sppgId         String
+  userId         String @unique
+  employeeNumber String @unique
+
+  // Basic info
+  position   EmployeePosition
+  department String?
+
+  // Employment details
+  hireDate     DateTime
+  contractType String // Permanent, Contract, Part-time
+  probationEnd DateTime?
+
+  // Compensation
+  baseSalary   Float
+  allowances   Json? // Transport, meal, etc
+  overtimeRate Float?
+
+  // Status
+  status            EmployeeStatus @default(ACTIVE)
+  terminationDate   DateTime?
+  terminationReason String?
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  sppg        Sppg         @relation(fields: [sppgId], references: [id])
+  user        User         @relation(fields: [userId], references: [id])
+  attendances Attendance[]
+  payrolls    Payroll[]
+
+  @@map("employees")
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  SICK_LEAVE
+  ANNUAL_LEAVE
+  UNPAID_LEAVE
+}
+
+model Attendance {
+  id         String   @id @default(cuid())
+  employeeId String
+  date       DateTime @db.Date
+
+  // Attendance details
+  status   AttendanceStatus @default(PRESENT)
+  checkIn  DateTime?
+  checkOut DateTime?
+
+  // Break times
+  breakStart DateTime?
+  breakEnd   DateTime?
+
+  // Calculated times
+  workingHours  Float? // in hours
+  overtimeHours Float? // in hours
+
+  // Location (for mobile check-in)
+  checkInLocation  Json? // {lat, lng}
+  checkOutLocation Json? // {lat, lng}
+
+  // Notes
+  notes      String?
+  approvedBy String? // Supervisor user ID
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, date])
+  @@map("attendances")
+}
+
+model Payroll {
+  id         String @id @default(cuid())
+  employeeId String
+
+  // Payroll period
+  periodStart DateTime  @db.Date
+  periodEnd   DateTime  @db.Date
+  payDate     DateTime?
+
+  // Basic calculation
+  baseSalary     Float
+  workingDays    Int
+  actualWorkDays Int
+  overtimeHours  Float @default(0)
+
+  // Earnings
+  basicPay    Float
+  overtimePay Float @default(0)
+  allowances  Float @default(0)
+  bonus       Float @default(0)
+  grossSalary Float
+
+  // Deductions
+  tax             Float @default(0)
+  insurance       Float @default(0)
+  otherDeductions Float @default(0)
+  totalDeductions Float
+
+  // Net pay
+  netSalary Float
+
+  // Payment info
+  paymentMethod String? // Bank Transfer, Cash
+  bankAccount   String?
+  paymentStatus String  @default("Pending") // Pending, Paid
+
+  // Notes
+  notes String?
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, periodStart, periodEnd])
+  @@map("payrolls")
+}
+
+// ================================
+// SYSTEM & AUDIT
+// ================================
+
+enum LogLevel {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+model AuditLog {
+  id String @id @default(cuid())
+
+  // Action details
+  action   String // CREATE, UPDATE, DELETE, LOGIN, etc
+  entity   String // Menu, Order, User, etc
+  entityId String?
+
+  // User context
+  userId   String?
+  userRole UserRole?
+  sppgId   String?
+
+  // Details
+  changes   Json? // What changed
+  oldValues Json? // Previous values
+  newValues Json? // New values
+
+  // Meta
+  level     LogLevel @default(INFO)
+  message   String?
+  ipAddress String?
+  userAgent String?
+
+  // Timestamp
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([sppgId])
+  @@index([createdAt])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+// System configurations per SPPG
+model Configuration {
+  id          String  @id @default(cuid())
+  sppgId      String? // NULL for global config
+  key         String
+  value       String
+  description String?
+  category    String? // Nutrition, Financial, Operational
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sppgId, key])
+  @@map("configurations")
 }
